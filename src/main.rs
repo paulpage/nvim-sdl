@@ -1,20 +1,22 @@
 extern crate clipboard;
 extern crate sdl2;
 
-use std::cmp::max;
 use std::env;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
+use std::thread;
+use std::sync::mpsc::channel;
 
-use sdl2::event::{Event, WindowEvent};
-use sdl2::keyboard::Mod;
-use sdl2::mouse::MouseButton;
-use sdl2::pixels::Color;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use sdl2::render::WindowCanvas;
 
 mod pane;
 use pane::Pane;
+
+mod neovim_connector;
+use neovim_connector::NvimEvent;
 
 fn select_font() -> Option<PathBuf> {
     match font_kit::source::SystemSource::new().select_best_match(
@@ -27,6 +29,13 @@ fn select_font() -> Option<PathBuf> {
 }
 
 fn main() {
+
+    let (server_sender, server_receiver) = channel();
+    let (client_sender, client_receiver) = channel();
+    thread::spawn(move|| {
+        neovim_connector::start(server_sender, client_receiver, env::args());
+    });
+
     let path = match select_font() {
         Some(p) => p,
         None => PathBuf::new(),
@@ -36,7 +45,7 @@ fn main() {
     let video_subsys = sdl_context.video().unwrap();
     let ttf_context = sdl2::ttf::init().unwrap();
     let window = video_subsys
-        .window("SDL2_TTF Example", 800, 600)
+        .window("Neovim", 800, 600)
         .position_centered()
         .resizable()
         .maximized()
@@ -47,160 +56,97 @@ fn main() {
 
     let mut text = vec![vec![" ".to_string(); 80]; 30];
 
-    let args: Vec<String> = env::args().collect();
-
     let mut pane = Pane::new(
         ttf_context.load_font(&path, 16).unwrap()
-    ));
-    arrange(&canvas, &mut panes);
+    );
 
     let mut ctrl_pressed = false;
     let mut alt_pressed = false;
-    let mut needs_redraw;
 
     'mainloop: loop {
-        needs_redraw = false;
         for event in sdl_context.event_pump().unwrap().poll_iter() {
-            needs_redraw = true;
-            if let Event::KeyDown {
-                keycode: Some(kc),
-                keymod,
-                ..
-            } = event
-            {
-                let mut key_string = String::new();
-                if keymod.contains(Mod::RCTRLMOD) || keymod.contains(Mod::LCTRLMOD) {
-                    key_string.push_str("C-");
-                    ctrl_pressed = true;
+            match event {
+                Event::Quit { .. } => break 'mainloop,
+                Event::KeyDown { keycode: Some(kc), keymod, .. } => {
+                    let key_to_send = match kc {
+                        Keycode::Return => "<CR>",
+                        Keycode::Backspace => "<BS>",
+                        Keycode::Escape => "<ESC>",
+                        _ => {
+                            println!("Unimplemented keycode: {}", kc);
+                            ""
+                        },
+                    };
+                    if key_to_send != "" {
+                        client_sender.send(key_to_send.to_string()).unwrap();
+                    }
+                    // match kc {
+                    //     Keycode::Return => client_sender.send("<CR>".to_string()).unwrap(),
+                    //     Keycode::Backspace => client_sender.send("<BS>".to_string()).unwrap(),
+                    //     Keycode::Escape => client_sender.send("<ESC>".to_string()).unwrap(),
+                    //     _ => println!("Unhandled keycode: {:?}", kc),
+                    // }
                 }
-                if keymod.contains(Mod::RALTMOD) || keymod.contains(Mod::LALTMOD) {
-                    key_string.push_str("A-");
-                    alt_pressed = true;
+                Event::TextInput { text, .. } => {
+                    client_sender.send(text).unwrap();
                 }
-                if keymod.contains(Mod::RSHIFTMOD) || keymod.contains(Mod::LSHIFTMOD) {
-                    key_string.push_str("S-");
-                }
-                key_string.push_str(&kc.name());
-
-                let kstr: &str = &key_string.clone();
-                match kstr {
-                    "C-'" => {
-                        panes.push(Pane::new(
-                            ttf_context.load_font(&path, 16).unwrap(),
-                            PaneType::Buffer,
-                            0,
-                        ));
-                        arrange(&canvas, &mut panes);
-                        pane_idx += 1;
-                    }
-                    "C-B" => panes[pane_idx].buffer_id = next(&buffers, panes[pane_idx].buffer_id),
-                    "C-S-B" => {
-                        panes[pane_idx].buffer_id = prev(&buffers, panes[pane_idx].buffer_id)
-                    }
-                    "C-J" => pane_idx = next(&panes, pane_idx),
-                    "C-K" => pane_idx = prev(&panes, pane_idx),
-                    "C-Q" => break 'mainloop,
-                    "C-O" => {
-                        let mut buffer = Buffer::new();
-                        fm.current_dir = env::current_dir().unwrap();
-                        fm.update(&mut buffer);
-                        let pane = &mut panes[pane_idx];
-                        pane.buffer_id = buffers.len();
-                        pane.pane_type = PaneType::FileManager;
-                        buffers.push(buffer);
-                    }
-                    "C-W" => {
-                        if panes.len() > 1 {
-                            panes.remove(pane_idx);
-                            pane_idx = prev(&panes, pane_idx);
-                            arrange(&canvas, &mut panes);
-                        }
-                    }
-                    _ => {
-                        let pane = &mut panes[pane_idx];
-                        let buffer = &mut buffers[pane.buffer_id];
-                        match pane.pane_type {
-                            PaneType::Buffer => {
-                                if pane.handle_keystroke(buffer, kstr) {
-                                    break 'mainloop;
-                                }
-                            }
-                            PaneType::FileManager => {
-                                fm.handle_key(pane, buffer, kstr);
-                            }
-                        }
-                    }
-                }
-            } else {
-                let pane = &mut panes[pane_idx];
-                let mut buffer = &mut buffers[pane.buffer_id];
-                match event {
-                    Event::Quit { .. } => break 'mainloop,
-                    Event::KeyUp { keymod, .. } => {
-                        if keymod.contains(Mod::RCTRLMOD) || keymod.contains(Mod::LCTRLMOD) {
-                            ctrl_pressed = false;
-                        }
-                        if keymod.contains(Mod::RALTMOD) || keymod.contains(Mod::LALTMOD) {
-                            alt_pressed = false;
-                        }
-                    }
-                    Event::Window { win_event, .. } => {
-                        if let WindowEvent::Resized(w, h) = win_event {
-                            pane.w = max(0, w - 40) as u32;
-                            pane.h = max(0, h - 40) as u32;
-                            arrange(&canvas, &mut panes);
-                        }
-                    }
-                    Event::TextInput { text, .. } => match pane.pane_type {
-                        PaneType::Buffer => {
-                            if !ctrl_pressed && !alt_pressed {
-                                buffer.action_insert_text(text);
-                            }
-                        }
-                        PaneType::FileManager => {
-                            fm.current_search.push_str(&text);
-                            buffer.name = fm.current_search.clone();
-                            let mut selection = buffer.cursor_y;
-                            'searchloop: for (i, line) in
-                                buffer.contents[buffer.cursor_y..].iter().enumerate()
-                            {
-                                if line.starts_with(&fm.current_search) {
-                                    selection = i + buffer.cursor_y;
-                                    break 'searchloop;
-                                }
-                            }
-                            buffer.select_line(selection);
-                        }
-                    },
-                    Event::MouseButtonDown { x, y, clicks, .. } => {
-                        pane.set_selection_from_screen(&mut buffer, x, y, false);
-                        if clicks > 1 {
-                            let (x, y) = buffer.prev_word(buffer.cursor_x, buffer.cursor_y);
-                            buffer.sel_x = x;
-                            buffer.sel_y = y;
-                            let (x, y) = buffer.next_word(buffer.cursor_x, buffer.cursor_y);
-                            buffer.cursor_x = x;
-                            buffer.cursor_y = y;
-                        }
-                    }
-                    Event::MouseMotion {
-                        mousestate, x, y, ..
-                    } => {
-                        if mousestate.is_mouse_button_pressed(MouseButton::Left) {
-                            pane.set_selection_from_screen(&mut buffer, x, y, true);
-                        }
-                    }
-                    Event::MouseWheel { y, .. } => pane.scroll(buffer, y * -5),
-                    Event::KeyDown { .. } => {}
-                    _ => {}
-                }
+                // Event::KeyUp { keymod, .. } => {
+                // }
+                // Event::Window { win_event, .. } => {
+                // }
+                // Event::TextInput { text, .. } => {},
+                // Event::MouseButtonDown { x, y, clicks, .. } => {
+                // }
+                // Event::MouseMotion {
+                //     mousestate, x, y, ..
+                // } => {
+                // }
+                // Event::MouseWheel { y, .. } => pane.scroll(buffer, y * -5),
+                // Event::KeyDown { .. } => {}
+                _ => {}
             }
         }
 
-        if needs_redraw {
-            draw(&mut panes, &mut buffers, pane_idx, &mut canvas);
+        let has_received = match server_receiver.try_recv() {
+            Ok(e) => {
+                match e {
+                    NvimEvent::GridLine(entries) => {
+                        for entry in entries {
+                            let row = entry.row as usize;
+                            let mut col = entry.col as usize;
+                            for cell in entry.cells {
+                                for _ in 0..cell.repeat {
+                                    text[row][col] = cell.text.clone();
+                                    col += 1;
+                                }
+                            }
+                        }
+                        false
+                    }
+                    NvimEvent::Flush => true,
+                    NvimEvent::GridCursorGoto(_grid, row, col) => {
+                        pane.cursor_row = row as i32;
+                        pane.cursor_col = col as i32;
+                        false
+                    }
+                    NvimEvent::GridClear(_) => {
+                        text = vec![vec![" ".to_string(); 80]; 30];
+                        false
+                    }
+                    NvimEvent::Close => {
+                        break 'mainloop;
+                    }
+                }
+            }
+            Err(_) => {
+                false
+            }
+        };
+
+        // if has_received {
+            pane.draw(&mut canvas, &text);
             canvas.present();
-        }
+        // }
 
         sleep(Duration::from_millis(5));
     }
