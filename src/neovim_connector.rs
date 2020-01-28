@@ -41,6 +41,11 @@ pub enum NvimEvent {
     Close,
 }
 
+pub enum ClientEvent {
+    Text(String),
+    Mouse { button: String, action: String, modifier: String, grid: i64, row: i64, col: i64 },
+}
+
 pub struct NvimBridge {
     tx: Sender<NvimEvent>,
 }
@@ -141,7 +146,7 @@ impl Handler for NvimBridge {
     }
 }
 
-pub fn start(tx: Sender<NvimEvent>, rx: Receiver<String>, args: Args) {
+pub fn start(tx: Sender<NvimEvent>, rx: Receiver<ClientEvent>, args: Args) {
     let mut cmd = Command::new("nvim");
     cmd.arg("--embed");
     let args: Vec<String> = args.collect();
@@ -163,7 +168,17 @@ pub fn start(tx: Sender<NvimEvent>, rx: Receiver<String>, args: Args) {
 
     loop {
         if let Ok(s) = rx.recv() {
-            nvim.input(&s).unwrap();
+            match s {
+                ClientEvent::Text(s) => {
+                    nvim.input(&s).unwrap();
+                }
+                ClientEvent::Mouse { button, action, modifier, grid, row, col } => {
+                    nvim.call_function("nvim_input_mouse", vec![
+                        button.into(), action.into(), modifier.into(), grid.into(), row.into(), col.into()
+                    ]).unwrap();
+                },
+
+            }
         }
     }
 }
