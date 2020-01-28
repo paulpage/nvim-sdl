@@ -313,11 +313,10 @@ dependencies = [
 
 [[package]]
 name = "neovim-lib"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.6.0"
+source = "git+https://github.com/daa84/neovim-lib#5291bf754bcfa55dcf6332808f72d09ebd78ce90"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "rmp 0.8.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rmpv 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -581,7 +580,7 @@ version = "0.1.0"
 dependencies = [
  "clipboard 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "font-kit 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "neovim-lib 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "neovim-lib 0.6.0 (git+https://github.com/daa84/neovim-lib)",
  "sdl2 0.32.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-segmentation 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -741,7 +740,7 @@ dependencies = [
 "checksum lyon_path 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0bcb57ac24a5428539e2c7c0592766d5933c937d703f430990c669c00de96862"
 "checksum malloc_buf 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
 "checksum memmap 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
-"checksum neovim-lib 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d6a8f5a1e1be160ce2b669c2c495a34ade6f3a525d4afafd7370c1792070f587"
+"checksum neovim-lib 0.6.0 (git+https://github.com/daa84/neovim-lib)" = "<none>"
 "checksum nodrop 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)" = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 "checksum num 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)" = "4703ad64153382334aa8db57c637364c322d3372e097840c72000dabdcf6156e"
 "checksum num-integer 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)" = "3f6ea62e9d81a77cd3ee9a2a5b9b609447857f3d358704331e4ef39eb247fcba"

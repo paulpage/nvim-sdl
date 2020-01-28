@@ -7,6 +7,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::thread;
 use std::sync::mpsc::channel;
+// use std::time::Instant;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -72,20 +73,15 @@ fn main() {
                         Keycode::Return => "<CR>",
                         Keycode::Backspace => "<BS>",
                         Keycode::Escape => "<ESC>",
+                        Keycode::Tab => "<Tab>",
                         _ => {
-                            println!("Unimplemented keycode: {}", kc);
+                            // println!("Unimplemented keycode: {}", kc);
                             ""
                         },
                     };
                     if key_to_send != "" {
                         client_sender.send(key_to_send.to_string()).unwrap();
                     }
-                    // match kc {
-                    //     Keycode::Return => client_sender.send("<CR>".to_string()).unwrap(),
-                    //     Keycode::Backspace => client_sender.send("<BS>".to_string()).unwrap(),
-                    //     Keycode::Escape => client_sender.send("<ESC>".to_string()).unwrap(),
-                    //     _ => println!("Unhandled keycode: {:?}", kc),
-                    // }
                 }
                 Event::TextInput { text, .. } => {
                     client_sender.send(text).unwrap();
@@ -133,6 +129,30 @@ fn main() {
                         text = vec![vec![" ".to_string(); 80]; 30];
                         false
                     }
+                    NvimEvent::GridScroll(e) => {
+                        if e.rows > 0 {
+                            for y in e.top..e.bot {
+                                for x in e.left..e.right {
+                                    let y_idx = y - e.rows;
+                                    if y_idx >= 0 {
+                                        text[y_idx as usize][x as usize] = text[y as usize][x as usize].clone();
+                                        text[y as usize][x as usize] = " ".to_string();
+                                    }
+                                }
+                            }
+                        } else {
+                            for y in (e.top..e.bot-1).rev() {
+                                for x in (e.left..e.right).rev() {
+                                    let y_idx = (y - e.rows) as usize;
+                                    if y_idx < text.len() {
+                                        text[y_idx as usize][x as usize] = text[y as usize][x as usize].clone();
+                                        text[y as usize][x as usize] = " ".to_string();
+                                    }
+                                }
+                            }
+                        }
+                        false
+                    }
                     NvimEvent::Close => {
                         break 'mainloop;
                     }
@@ -143,11 +163,11 @@ fn main() {
             }
         };
 
-        // if has_received {
+        if has_received {
             pane.draw(&mut canvas, &text);
             canvas.present();
-        // }
+        }
+        sleep(Duration::from_millis(1));
 
-        sleep(Duration::from_millis(5));
     }
 }

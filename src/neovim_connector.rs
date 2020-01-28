@@ -5,6 +5,42 @@ use neovim_lib::{Value, Neovim, NeovimApi, Session, UiAttachOptions, Handler, Re
 use std::sync::mpsc::{Sender, Receiver};
 use std::env::Args;
 
+#[derive(Debug)]
+pub struct GridCell {
+    pub text: String,
+    pub highlight: i64,
+    pub repeat: i64,
+}
+
+#[derive(Debug)]
+pub struct GridLine {
+    pub grid: i64,
+    pub row: i64,
+    pub col: i64,
+    pub cells: Vec<GridCell>,
+}
+
+#[derive(Debug)]
+pub struct GridScroll {
+    pub grid: i64,
+    pub top: i64,
+    pub bot: i64,
+    pub left: i64,
+    pub right: i64,
+    pub rows: i64,
+    pub cols: i64,
+}
+
+#[derive(Debug)]
+pub enum NvimEvent {
+    GridLine(Vec<GridLine>),
+    GridCursorGoto(i64, i64, i64),
+    GridClear(i64),
+    GridScroll(GridScroll),
+    Flush,
+    Close,
+}
+
 pub struct NvimBridge {
     tx: Sender<NvimEvent>,
 }
@@ -24,68 +60,6 @@ impl RequestHandler for NvimBridge {
         println!("Unknown request: {}", name);
         Err("Unkown request".into())
     }
-}
-
-fn parse_nvim_value(v: &Value) {
-    match v {
-        Value::Nil => (),
-        Value::Boolean(b) => println!("Bool: {}", b),
-        Value::Integer(i) => println!("Int: {}", i),
-        Value::F32(f) => println!("Float: {}", f),
-        Value::F64(f) => println!("Float: {}", f),
-        Value::String(s) => println!("String: {}", s),
-        Value::Binary(b) => {
-            println!("Binary:");
-            for x in b {
-                println!("{}", x);
-            }
-        }
-        Value::Array(v) => {
-            println!("Value:");
-            for val in v {
-                parse_nvim_value(val);
-            }
-        }
-        Value::Map(vv) => {
-            println!("Map:");
-            for (k, v) in vv {
-                println!("Key:");
-                parse_nvim_value(k);
-                println!("Value:");
-                parse_nvim_value(v);
-            }
-        }
-        Value::Ext(i, uu) => {
-            println!("Ext: {}", i);
-            for u in uu {
-                println!("{}", u);
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct GridCell {
-    pub text: String,
-    pub highlight: i64,
-    pub repeat: i64,
-}
-
-#[derive(Debug)]
-pub struct GridLine {
-    pub grid: i64,
-    pub row: i64,
-    pub col: i64,
-    pub cells: Vec<GridCell>,
-}
-
-#[derive(Debug)]
-pub enum NvimEvent {
-    GridLine(Vec<GridLine>),
-    GridCursorGoto(i64, i64, i64),
-    GridClear(i64),
-    Flush,
-    Close,
 }
 
 fn parse_grid_cells(entry: Vec<Value>) -> Vec<GridCell> {
@@ -111,16 +85,13 @@ fn parse_grid_cells(entry: Vec<Value>) -> Vec<GridCell> {
 fn parse_gridline_event(event: Vec<Value>) -> Vec<GridLine> {
     let mut entries = Vec::new();
     for line in event {
-        match line {
-            Value::Array(val) => {
-                entries.push(GridLine {
-                    grid: val[0].as_i64().unwrap(),
-                    row: val[1].as_i64().unwrap(),
-                    col: val[2].as_i64().unwrap(),
-                    cells: parse_grid_cells(val[3].as_array().unwrap().to_vec()),
-                });
-            }
-            _ => {},
+        if let Value::Array(val) = line {
+            entries.push(GridLine {
+                grid: val[0].as_i64().unwrap(),
+                row: val[1].as_i64().unwrap(),
+                col: val[2].as_i64().unwrap(),
+                cells: parse_grid_cells(val[3].as_array().unwrap().to_vec()),
+            });
         }
     }
     entries
@@ -144,6 +115,18 @@ impl Handler for NvimBridge {
                                     self.tx.send(NvimEvent::GridCursorGoto(grid, row, col)).unwrap();
                                 }
                                 "clear" => self.tx.send(NvimEvent::GridClear(event[1].as_i64().unwrap())).unwrap(),
+                                "grid_scroll" => {
+                                    let scroll_args = event[1].as_array().unwrap();
+                                    self.tx.send(NvimEvent::GridScroll(GridScroll {
+                                        grid: scroll_args[0].as_i64().unwrap(),
+                                        top: scroll_args[1].as_i64().unwrap(),
+                                        bot: scroll_args[2].as_i64().unwrap(),
+                                        left: scroll_args[3].as_i64().unwrap(),
+                                        right: scroll_args[4].as_i64().unwrap(),
+                                        rows: scroll_args[5].as_i64().unwrap(),
+                                        cols: scroll_args[6].as_i64().unwrap(),
+                                    })).unwrap();
+                                }
                                 _ => {}
                             }
                         }
@@ -152,6 +135,9 @@ impl Handler for NvimBridge {
             }
             _ => println!("Unknown notify: {} {:?}", name, args)
         }
+    }
+    fn handle_close(&mut self) {
+        self.tx.send(NvimEvent::Close).unwrap();
     }
 }
 
@@ -176,11 +162,8 @@ pub fn start(tx: Sender<NvimEvent>, rx: Receiver<String>, args: Args) {
     nvim.ui_attach(80, 30, &ui_opts).unwrap();
 
     loop {
-        match rx.recv() {
-            Ok(s) => {
-                nvim.input(&s).unwrap();
-            }
-            Err(_) => {}
+        if let Ok(s) = rx.recv() {
+            nvim.input(&s).unwrap();
         }
     }
 }

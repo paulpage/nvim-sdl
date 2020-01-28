@@ -55,7 +55,7 @@ impl<'a> Pane<'a> {
     pub fn draw(
         &mut self,
         canvas: &mut WindowCanvas,
-        text: &Vec<Vec<String>>,
+        text: &[Vec<String>],
     ) {
         let bg_color = Color::RGB(0, 0, 50);
         canvas.set_draw_color(bg_color);
@@ -63,9 +63,7 @@ impl<'a> Pane<'a> {
         let fg_color = Color::RGB(253, 244, 193);
         canvas.set_draw_color(fg_color);
         for (rownum, row) in text.iter().enumerate() {
-            // println!();
             for (colnum, col) in row.iter().enumerate() {
-                // print!("{}", col);
 
                 let key = FontCacheKey {
                     c: col.to_string(),
@@ -98,6 +96,6 @@ impl<'a> Pane<'a> {
         }
 
         let cursor_rect = Rect::new(self.x + self.cursor_col * self.col_width, self.y + self.cursor_row * self.row_height, 2, self.row_height as u32);
-        canvas.fill_rect(cursor_rect);
+        canvas.fill_rect(cursor_rect).unwrap();
     }
 }
