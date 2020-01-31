@@ -32,13 +32,31 @@ pub struct GridScroll {
 }
 
 #[derive(Debug)]
+pub struct ModeInfo {
+    cursor_shape: String,
+    cell_percentage: i64,
+    // TODO cursor-blinking (blinkwait, blinkon, blinkoff)
+    attr_id: String,
+    attr_id_lm: String,
+    short_name: String,
+    name: String,
+    // TODO mouse_shape (not yet implemented in nvim)
+}
+
+#[derive(Debug)]
+pub enum NvimMode { Normal, Insert, Command }
+
+#[derive(Debug)]
 pub enum NvimEvent {
     GridLine(Vec<GridLine>),
     GridCursorGoto(i64, i64, i64),
     GridClear(i64),
     GridScroll(GridScroll),
+    DefaultColorsSet { fg: i64, bg: i64, special: i64 },
     Flush,
     Close,
+    ModeChange(NvimMode),
+    ModeInfoSet(ModeInfo),
 }
 
 pub enum ClientEvent {
@@ -119,7 +137,8 @@ impl Handler for NvimBridge {
                                     let col = goto_args[2].as_i64().unwrap();
                                     self.tx.send(NvimEvent::GridCursorGoto(grid, row, col)).unwrap();
                                 }
-                                "clear" => self.tx.send(NvimEvent::GridClear(event[1].as_i64().unwrap())).unwrap(),
+                                "grid_clear" => self.tx.send(NvimEvent::GridClear(event[1].as_array().unwrap()[0].as_i64().unwrap())).unwrap(),
+                                // "grid_clear" => println!("CLEAR {:?}", event),
                                 "grid_scroll" => {
                                     let scroll_args = event[1].as_array().unwrap();
                                     self.tx.send(NvimEvent::GridScroll(GridScroll {
@@ -132,7 +151,22 @@ impl Handler for NvimBridge {
                                         cols: scroll_args[6].as_i64().unwrap(),
                                     })).unwrap();
                                 }
-                                _ => {}
+                                "default_colors_set" => {
+                                    let color_args = event[1].as_array().unwrap();
+                                    self.tx.send(NvimEvent::DefaultColorsSet { fg: color_args[0].as_i64().unwrap(), bg: color_args[1].as_i64().unwrap(), special: color_args[2].as_i64().unwrap() }).unwrap();
+                                }
+                                "mouse_on" => {}
+                                "mouse_off" => {}
+                                "mode_info_set" => {
+                                    println!("MODE INFO SET: {:?}", event);
+                                }
+                                "mode_change" => {
+                                    // mode_args = event[0].as_array().unwrap();
+                                    println!("MODE CHANGE: {:?}", event);
+                                }
+                                _ => {
+                                    println!("Unknown redraw: {:?}", event_name);
+                                }
                             }
                         }
                     }

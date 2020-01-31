@@ -18,7 +18,7 @@ mod pane;
 use pane::Pane;
 
 mod neovim_connector;
-use neovim_connector::{NvimEvent, ClientEvent};
+use neovim_connector::{NvimEvent, ClientEvent, NvimMode};
 
 struct InputState {
     alt_down: bool,
@@ -26,6 +26,7 @@ struct InputState {
     shift_down: bool,
     mouse_row: i32,
     mouse_col: i32,
+    mode: NvimMode,
 }
 
 fn select_font() -> Option<PathBuf> {
@@ -57,6 +58,7 @@ fn main() {
         shift_down: false,
         mouse_row: 0,
         mouse_col: 0,
+        mode: NvimMode::Normal,
     };
 
     let sdl_context = sdl2::init().unwrap();
@@ -81,9 +83,6 @@ fn main() {
     let font = ttf_context.load_font(&path, 16).unwrap();
     let col_width = font.size_of_char('W').unwrap().0 as i32;
     let row_height = font.height();
-
-    let mut ctrl_pressed = false;
-    let mut alt_pressed = false;
 
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
@@ -247,8 +246,20 @@ fn main() {
                         }
                         false
                     }
+                    NvimEvent::DefaultColorsSet { fg, bg, special } => {
+                        println!("Ok I got here and am gonna set the colors right fast");
+                        pane.set_colors(fg, bg, special);
+                        false
+                    }
                     NvimEvent::Close => {
                         break 'mainloop;
+                    }
+                    NvimEvent::ModeChange(mode) => {
+                        input.mode = mode;
+                        false
+                    }
+                    NvimEvent::ModeInfoSet(mode_info) => {
+                        false
                     }
                 }
             }

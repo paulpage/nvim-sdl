@@ -29,12 +29,29 @@ pub struct Pane<'a> {
     pub scroll_idx: usize,
     pub scroll_offset: i32,
     pub row_height: i32,
+    bg_color: Color,
+    fg_color: Color,
+    special_color: Color,
     col_width: i32,
     pub font: Font<'a, 'static>,
     font_cache: HashMap<FontCacheKey, Rc<FontCacheEntry>>,
 }
 
+fn parse_color(c: i64) -> Color {
+    Color::RGB(
+        ((c & 0xff0000) >> 16) as u8,
+        ((c & 0x00ff00) >> 8) as u8,
+        (c & 0x0000ff) as u8)
+}
+
 impl<'a> Pane<'a> {
+
+    pub fn set_colors(&mut self, fg: i64, bg: i64, special: i64) {
+        self.bg_color = parse_color(bg);
+        self.fg_color = parse_color(fg);
+        self.special_color = parse_color(special);
+    }
+
     pub fn new(font: Font<'a, 'static>) -> Self {
         Pane {
             x: 0,
@@ -47,6 +64,9 @@ impl<'a> Pane<'a> {
             col_width: font.size_of_char('W').unwrap().0 as i32,
             cursor_row: 0,
             cursor_col: 0,
+            bg_color: Color::RGB(255, 0, 0),
+            fg_color: Color::RGB(0, 255, 0),
+            special_color: Color::RGB(0, 0, 255),
             font,
             font_cache: HashMap::new(),
         }
@@ -57,20 +77,18 @@ impl<'a> Pane<'a> {
         canvas: &mut WindowCanvas,
         text: &[Vec<String>],
     ) {
-        let bg_color = Color::RGB(0, 0, 50);
-        canvas.set_draw_color(bg_color);
+        canvas.set_draw_color(self.bg_color);
         canvas.clear();
-        let fg_color = Color::RGB(253, 244, 193);
-        canvas.set_draw_color(fg_color);
+        canvas.set_draw_color(self.fg_color);
         for (rownum, row) in text.iter().enumerate() {
             for (colnum, col) in row.iter().enumerate() {
 
                 let key = FontCacheKey {
                     c: col.to_string(),
-                    color: fg_color,
+                    color: self.fg_color,
                 };
                 let tex = self.font_cache.get(&key).cloned().unwrap_or_else(|| {
-                    let surface = self.font.render(&col.to_string()).blended(fg_color).unwrap();
+                    let surface = self.font.render(&col.to_string()).blended(self.fg_color).unwrap();
                     let texture = canvas
                         .texture_creator()
                         .create_texture_from_surface(&surface)
@@ -87,8 +105,6 @@ impl<'a> Pane<'a> {
                 let texture = &tex.texture;
                 let w = self.col_width;
                 let h = self.row_height;
-                // let w = min(self.w as i32 - (colnum as i32 + self.col_width as i32) as i32, tex.w as i32) as u32;
-                // let h = min(self.h as i32 - rownum as i32, tex.h as i32) as u32;
                 let source = Rect::new(0, 0, w as u32, h as u32);
                 let target = Rect::new(self.x + colnum as i32 * self.col_width as i32, self.y + rownum as i32 * self.row_height as i32, w as u32, h as u32);
                 canvas.copy(&texture, Some(source), Some(target)).unwrap();
