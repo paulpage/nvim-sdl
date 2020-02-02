@@ -203,39 +203,56 @@ impl Handler for NvimBridge {
                                 }
                                 "mode_change" => {
                                     // mode_args = event[0].as_array().unwrap();
-                                    println!("MODE CHANGE: {:?}", event);
+                                    // println!("MODE CHANGE: {:?}", event);
                                 }
                                 "hl_attr_define" => {
-                                    let mut hl = Highlight::default();
-                                    let args = event[1].as_array().unwrap();
-                                    let id = args[0].as_i64().unwrap();
-                                    let map = args[1].as_map().unwrap();
-                                    for (k, v) in map {
-                                        match k.as_str().unwrap() {
-                                            "foreground" => { hl.fg = v.as_i64().unwrap(); }
-                                            "background" => { hl.bg = v.as_i64().unwrap(); }
-                                            "special" => { hl.special = v.as_i64().unwrap(); }
-                                            "reverse" => { hl.reverse = v.as_bool().unwrap(); }
-                                            "italic" => { hl.italic = v.as_bool().unwrap(); }
-                                            "bold" => { hl.bold = v.as_bool().unwrap(); }
-                                            "strikethrough" => { hl.strikethrough = v.as_bool().unwrap(); }
-                                            "underline" => { hl.underline = v.as_bool().unwrap(); }
-                                            "undercurl" => { hl.undercurl = v.as_bool().unwrap(); }
-                                            "blend" => { hl.blend = v.as_i64().unwrap(); }
-                                            _ => {}
+                                    for hl_definition in event.iter().skip(1) {
+                                        let mut hl = Highlight::default();
+                                        let args = hl_definition.as_array().unwrap();
+                                        let id = args[0].as_i64().unwrap();
+                                        let map = args[1].as_map().unwrap();
+                                        for (k, v) in map {
+                                            match k.as_str().unwrap() {
+                                                "foreground" => { hl.fg = v.as_i64().unwrap(); }
+                                                "background" => { hl.bg = v.as_i64().unwrap(); }
+                                                "special" => { hl.special = v.as_i64().unwrap(); }
+                                                "reverse" => { hl.reverse = v.as_bool().unwrap(); }
+                                                "italic" => { hl.italic = v.as_bool().unwrap(); }
+                                                "bold" => { hl.bold = v.as_bool().unwrap(); }
+                                                "strikethrough" => { hl.strikethrough = v.as_bool().unwrap(); }
+                                                "underline" => { hl.underline = v.as_bool().unwrap(); }
+                                                "undercurl" => { hl.undercurl = v.as_bool().unwrap(); }
+                                                "blend" => { hl.blend = v.as_i64().unwrap(); }
+                                                _ => {}
+                                            }
                                         }
+                                        self.tx.send(NvimEvent::HighlightAttrDefine { id, hl }).unwrap();
                                     }
-                                    self.tx.send(NvimEvent::HighlightAttrDefine { id, hl }).unwrap();
+                                }
+                                "hl_group_set" => {
+                                    // println!("HL GROUP SET:");
+                                    for arg in event {
+                                        // println!();
+                                        // pretty_print_value(arg, 0);
+                                    }
+                                }
+                                "option_set" => {
+                                    for arg in event {
+                                        // pretty_print_value(arg, 0);
+                                        // println!();
+                                    }
+                                }
+                                "grid_resize" => {
+                                    for arg in event {
+                                        // pretty_print_value(arg, 0);
+                                        // println!();
+                                    }
                                 }
                                 _ => {
                                     println!("Unknown redraw: {:?}", event_name);
                                 }
                             }
-                        } else {
-                            println!("The first one isn't a string");
                         }
-                    } else {
-                        println!("It's not an array");
                     }
                 }
             }

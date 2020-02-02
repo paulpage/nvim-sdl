@@ -142,6 +142,7 @@ impl<'a> Pane<'a> {
             }
         }
 
+        canvas.set_draw_color(self.fg_color);
         let cursor_rect = Rect::new(self.x + self.cursor_col * self.col_width, self.y + self.cursor_row * self.row_height, 2, self.row_height as u32);
         canvas.fill_rect(cursor_rect).unwrap();
     }

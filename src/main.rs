@@ -92,29 +92,171 @@ fn main() {
             match event {
                 Event::Quit { .. } => break 'mainloop,
                 Event::KeyDown { keycode: Some(kc), keymod, .. } => {
-                    input.shift_down = keymod.contains(Mod::LSHIFTMOD | Mod::RSHIFTMOD);
-                    input.ctrl_down = keymod.contains(Mod::LCTRLMOD | Mod::RCTRLMOD);
-                    input.alt_down = keymod.contains(Mod::LALTMOD | Mod::RALTMOD);
-                    if kc == Keycode::F1 {
-                        client_sender.send(ClientEvent::Mouse {
-                            button: "wheel".into(),
-                            action: "down".into(),
-                            modifier: "".into(),
-                            grid: 0,
-                            row: 0,
-                            col: 0,
-                        });
-                    }
-                    let key_to_send = match kc {
-                        Keycode::Return => "CR",
-                        Keycode::Backspace => "BS",
-                        Keycode::Escape => "ESC",
-                        Keycode::Tab => "Tab",
-                        _ => {
-                            // println!("Unimplemented keycode: {}", kc);
-                            ""
-                        },
+                    input.shift_down = keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD);
+                    input.ctrl_down = keymod.contains(Mod::LCTRLMOD) || keymod.contains(Mod::RCTRLMOD);
+                    input.alt_down = keymod.contains(Mod::LALTMOD) || keymod.contains(Mod::RALTMOD);
+
+                    // These keys should only be send with a modifier, otherwise they're handled by
+                    // the text input event.
+                    let mut key_to_send = match kc {
+                        Keycode::Space => "Space",
+                        // Keycode::Exclaim => "",
+                        // Keycode::Quotedbl => "",
+                        // Keycode::Hash => "",
+                        // Keycode::Dollar => "",
+                        // Keycode::Percent => "",
+                        // Keycode::Ampersand => "",
+                        // Keycode::Quote => "",
+                        // Keycode::LeftParen => "",
+                        // Keycode::RightParen => "",
+                        // Keycode::Asterisk => "",
+                        // Keycode::Plus => "",
+                        Keycode::Comma => ",",
+                        Keycode::Minus => "-",
+                        Keycode::Period => ".",
+                        Keycode::Slash => "/",
+                        Keycode::Num0 => "0",
+                        Keycode::Num1 => "1",
+                        Keycode::Num2 => "2",
+                        Keycode::Num3 => "3",
+                        Keycode::Num4 => "4",
+                        Keycode::Num5 => "5",
+                        Keycode::Num6 => "6",
+                        Keycode::Num7 => "7",
+                        Keycode::Num8 => "8",
+                        Keycode::Num9 => "9",
+                        Keycode::Colon => "",
+                        Keycode::Semicolon => ";",
+                        // Keycode::Less => "",
+                        Keycode::Equals => "=",
+                        // Keycode::Greater => "",
+                        // Keycode::Question => "",
+                        // Keycode::At => "",
+                        Keycode::LeftBracket => "[",
+                        Keycode::Backslash => "\\",
+                        Keycode::RightBracket => "]",
+                        // Keycode::Caret => "",
+                        // Keycode::Underscore => "",
+                        Keycode::Backquote => "`",
+                        Keycode::A => "a",
+                        Keycode::B => "b",
+                        Keycode::C => "c",
+                        Keycode::D => "d",
+                        Keycode::E => "e",
+                        Keycode::F => "f",
+                        Keycode::G => "g",
+                        Keycode::H => "h",
+                        Keycode::I => "i",
+                        Keycode::J => "j",
+                        Keycode::K => "k",
+                        Keycode::L => "l",
+                        Keycode::M => "m",
+                        Keycode::N => "n",
+                        Keycode::O => "o",
+                        Keycode::P => "p",
+                        Keycode::Q => "q",
+                        Keycode::R => "r",
+                        Keycode::S => "s",
+                        Keycode::T => "t",
+                        Keycode::U => "u",
+                        Keycode::V => "v",
+                        Keycode::W => "w",
+                        Keycode::X => "x",
+                        Keycode::Y => "y",
+                        Keycode::Z => "z",
+                        Keycode::Caret => "^",
+                        _ => "",
                     };
+                    if key_to_send != "" && (input.ctrl_down || input.alt_down) {
+                        if input.shift_down {
+                            key_to_send = match key_to_send {
+                                "0" => ")",
+                                "1" => "!",
+                                "2" => "@",
+                                "3" => "#",
+                                "4" => "$",
+                                "5" => "%",
+                                "6" => "^",
+                                "7" => "&",
+                                "8" => "*",
+                                "9" => "(",
+                                "," => "<",
+                                "-" => "_",
+                                "." => ">",
+                                "/" => "?",
+                                ";" => ":",
+                                "=" => "+",
+                                "[" => "{",
+                                "\\" => "|",
+                                "]" => "}",
+                                "`" => "~",
+                                _ => key_to_send,
+                            };
+                        }
+                        client_sender.send(ClientEvent::Text(
+                            format!("<{}{}{}>",
+                                if input.alt_down { "M-" } else { "" },
+                                if input.ctrl_down { "C-" } else { "" },
+                                key_to_send,
+                            )
+                        )).unwrap();
+                    }
+
+                    // These keys should always be sent, regardless of modifiers.
+                    let key_to_send = match kc {
+                        Keycode::Backspace => "BS",
+                        Keycode::Tab => "Tab",
+                        Keycode::Return => "CR",
+                        Keycode::Escape => "Esc",
+                        Keycode::Delete => "Del",
+                        Keycode::CapsLock => "",
+                        Keycode::F1 => "F1",
+                        Keycode::F2 => "F2",
+                        Keycode::F3 => "F3",
+                        Keycode::F4 => "F4",
+                        Keycode::F5 => "F5",
+                        Keycode::F6 => "F6",
+                        Keycode::F7 => "F7",
+                        Keycode::F8 => "F8",
+                        Keycode::F9 => "F9",
+                        Keycode::F10 => "F10",
+                        Keycode::F11 => "F11",
+                        Keycode::F12 => "F12",
+                        Keycode::PrintScreen => "",
+                        Keycode::ScrollLock => "",
+                        Keycode::Pause => "",
+                        Keycode::Insert => "Insert",
+                        Keycode::Home => "Home",
+                        Keycode::PageUp => "PageUp",
+                        Keycode::End => "End",
+                        Keycode::PageDown => "PageDown",
+                        Keycode::Right => "Right",
+                        Keycode::Left => "Left",
+                        Keycode::Down => "Down",
+                        Keycode::Up => "Up",
+                        Keycode::NumLockClear => "",
+                        Keycode::KpDivide => "kDivide",
+                        Keycode::KpMultiply => "kMultiply",
+                        Keycode::KpMinus => "kMinus",
+                        Keycode::KpPlus => "kPlus",
+                        Keycode::KpEnter => "kEnter",
+                        Keycode::Kp1 => "k1",
+                        Keycode::Kp2 => "k2",
+                        Keycode::Kp3 => "k3",
+                        Keycode::Kp4 => "k4",
+                        Keycode::Kp5 => "k5",
+                        Keycode::Kp6 => "k6",
+                        Keycode::Kp7 => "k7",
+                        Keycode::Kp8 => "k8",
+                        Keycode::Kp9 => "k9",
+                        Keycode::Kp0 => "k0",
+                        Keycode::KpPeriod => "kPoint",
+                        Keycode::Execute => "",
+                        Keycode::Help => "Help",
+                        Keycode::Undo => "Undo",
+                        _ => "",
+                    };
+
                     if key_to_send != "" {
                         client_sender.send(ClientEvent::Text(
                             format!("<{}{}{}{}>",
@@ -123,24 +265,11 @@ fn main() {
                                 if input.shift_down { "S-" } else { "" },
                                 key_to_send,
                             )
-                            // key_to_send.to_string()
                         )).unwrap();
                     }
                 }
                 Event::TextInput { text, .. } => {
-                    // let is_modified = input.alt_down || input.ctrl_down || input.shift_down;
-                    // if is_modified {
-                    //     client_sender.send(ClientEvent::Text(
-                    //             format!("<{}{}{}{}>",
-                    //                 if input.alt_down { "M-" } else { "" },
-                    //                 if input.ctrl_down { "C-" } else { "" },
-                    //                 if input.shift_down { "S-" } else { "" },
-                    //                 text.to_lowercase(),
-                    //             )
-                    //     )).unwrap();
-                    // } else {
-                        client_sender.send(ClientEvent::Text(text)).unwrap();
-                    // }
+                    client_sender.send(ClientEvent::Text(text)).unwrap();
                 }
                 Event::KeyUp { keymod, .. } => {
                     input.shift_down = keymod.contains(Mod::LSHIFTMOD | Mod::RSHIFTMOD);
@@ -203,14 +332,17 @@ fn main() {
             Ok(e) => {
                 match e {
                     NvimEvent::GridLine(entries) => {
+                        let mut last_hl_id = -1;
                         for entry in entries {
                             let row = entry.row as usize;
                             let mut col = entry.col as usize;
                             for cell in entry.cells {
+                                let hl = if cell.highlight == -1 { last_hl_id } else { cell.highlight };
                                 for _ in 0..cell.repeat {
-                                    text[row][col] = TextCell { text: cell.text.clone(), hl_id: cell.highlight };
+                                    text[row][col] = TextCell { text: cell.text.clone(), hl_id: hl };
                                     col += 1;
                                 }
+                                last_hl_id = if cell.highlight == -1 { last_hl_id } else { cell.highlight };
                             }
                         }
                         false
@@ -265,7 +397,6 @@ fn main() {
                     }
                     NvimEvent::HighlightAttrDefine{ id, hl } => {
                         highlight_table.insert(id, hl);
-                        println!("HL TABLE: {:?}", highlight_table);
                         false
                     }
                 }
