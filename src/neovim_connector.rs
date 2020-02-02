@@ -31,6 +31,31 @@ pub struct GridScroll {
     pub cols: i64,
 }
 
+#[derive(Debug, Default)]
+pub struct Highlight {
+    pub fg: i64,
+    pub bg: i64,
+    pub special: i64,
+    pub reverse: bool,
+    pub italic: bool,
+    pub bold: bool,
+    pub strikethrough: bool,
+    pub underline: bool,
+    pub undercurl: bool,
+    pub blend: i64,
+}
+
+impl Highlight {
+    fn default() -> Self {
+        Self {
+            fg: -1,
+            bg: -1,
+            special: -1,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ModeInfo {
     cursor_shape: String,
@@ -57,6 +82,7 @@ pub enum NvimEvent {
     Close,
     ModeChange(NvimMode),
     ModeInfoSet(ModeInfo),
+    HighlightAttrDefine { id: i64, hl: Highlight },
 }
 
 pub enum ClientEvent {
@@ -71,6 +97,21 @@ pub struct NvimBridge {
 impl NvimBridge {
     pub fn new(tx: Sender<NvimEvent>) -> Self {
         Self { tx }
+    }
+}
+
+fn pretty_print_value(v: &Value, indent_level: usize) {
+    match v {
+        Value::Nil => { print!("(nil value)"); },
+        Value::Boolean(b) => { print!("{}{}", " ".repeat(indent_level), b); },
+        Value::Integer(i) => { print!("{}{}", " ".repeat(indent_level), i); },
+        Value::F32(f)     => { print!("{}{}", " ".repeat(indent_level), f); },
+        Value::F64(f)     => { print!("{}{}", " ".repeat(indent_level), f); },
+        Value::String(s) => { print!("{}{}", " ".repeat(indent_level), s); },
+        Value::Binary(bs) => { print!("(skipping binary value)"); },
+        Value::Array(vs) => { print!("["); for v in vs { pretty_print_value(v, indent_level + 2); print!(", ");} print!("]"); },
+        Value::Map(vvs) => { print!("{{"); for (k, v) in vvs { pretty_print_value(k, indent_level); print!(":"); pretty_print_value(v, indent_level + 2); } print!(" }}"); },
+        Value::Ext(i, us) => { print!("(skipping ext value)"); },
     }
 }
 
@@ -158,17 +199,43 @@ impl Handler for NvimBridge {
                                 "mouse_on" => {}
                                 "mouse_off" => {}
                                 "mode_info_set" => {
-                                    println!("MODE INFO SET: {:?}", event);
+                                    // println!("MODE INFO SET: {:?}", event);
                                 }
                                 "mode_change" => {
                                     // mode_args = event[0].as_array().unwrap();
                                     println!("MODE CHANGE: {:?}", event);
                                 }
+                                "hl_attr_define" => {
+                                    let mut hl = Highlight::default();
+                                    let args = event[1].as_array().unwrap();
+                                    let id = args[0].as_i64().unwrap();
+                                    let map = args[1].as_map().unwrap();
+                                    for (k, v) in map {
+                                        match k.as_str().unwrap() {
+                                            "foreground" => { hl.fg = v.as_i64().unwrap(); }
+                                            "background" => { hl.bg = v.as_i64().unwrap(); }
+                                            "special" => { hl.special = v.as_i64().unwrap(); }
+                                            "reverse" => { hl.reverse = v.as_bool().unwrap(); }
+                                            "italic" => { hl.italic = v.as_bool().unwrap(); }
+                                            "bold" => { hl.bold = v.as_bool().unwrap(); }
+                                            "strikethrough" => { hl.strikethrough = v.as_bool().unwrap(); }
+                                            "underline" => { hl.underline = v.as_bool().unwrap(); }
+                                            "undercurl" => { hl.undercurl = v.as_bool().unwrap(); }
+                                            "blend" => { hl.blend = v.as_i64().unwrap(); }
+                                            _ => {}
+                                        }
+                                    }
+                                    self.tx.send(NvimEvent::HighlightAttrDefine { id, hl }).unwrap();
+                                }
                                 _ => {
                                     println!("Unknown redraw: {:?}", event_name);
                                 }
                             }
+                        } else {
+                            println!("The first one isn't a string");
                         }
+                    } else {
+                        println!("It's not an array");
                     }
                 }
             }

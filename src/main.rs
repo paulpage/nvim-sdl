@@ -7,6 +7,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::thread;
 use std::sync::mpsc::channel;
+use std::collections::HashMap;
 // use std::time::Instant;
 
 use sdl2::event::Event;
@@ -15,7 +16,7 @@ use sdl2::mouse::MouseButton;
 use sdl2::render::WindowCanvas;
 
 mod pane;
-use pane::Pane;
+use pane::{Pane, TextCell};
 
 mod neovim_connector;
 use neovim_connector::{NvimEvent, ClientEvent, NvimMode};
@@ -74,7 +75,7 @@ fn main() {
         .unwrap();
     let mut canvas: WindowCanvas = window.into_canvas().build().unwrap();
 
-    let mut text = vec![vec![" ".to_string(); 80]; 30];
+    let mut text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; 80]; 30];
 
     let mut pane = Pane::new(
         ttf_context.load_font(&path, 16).unwrap()
@@ -83,6 +84,8 @@ fn main() {
     let font = ttf_context.load_font(&path, 16).unwrap();
     let col_width = font.size_of_char('W').unwrap().0 as i32;
     let row_height = font.height();
+
+    let mut highlight_table = HashMap::new();
 
     'mainloop: loop {
         for event in sdl_context.event_pump().unwrap().poll_iter() {
@@ -205,7 +208,7 @@ fn main() {
                             let mut col = entry.col as usize;
                             for cell in entry.cells {
                                 for _ in 0..cell.repeat {
-                                    text[row][col] = cell.text.clone();
+                                    text[row][col] = TextCell { text: cell.text.clone(), hl_id: cell.highlight };
                                     col += 1;
                                 }
                             }
@@ -219,7 +222,7 @@ fn main() {
                         false
                     }
                     NvimEvent::GridClear(_) => {
-                        text = vec![vec![" ".to_string(); 80]; 30];
+                        text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; 80]; 30];
                         false
                     }
                     NvimEvent::GridScroll(e) => {
@@ -229,7 +232,7 @@ fn main() {
                                     let y_idx = y - e.rows;
                                     if y_idx >= 0 {
                                         text[y_idx as usize][x as usize] = text[y as usize][x as usize].clone();
-                                        text[y as usize][x as usize] = " ".to_string();
+                                        text[y as usize][x as usize] = TextCell {text: " ".to_string(), hl_id: 0};
                                     }
                                 }
                             }
@@ -239,7 +242,7 @@ fn main() {
                                     let y_idx = (y - e.rows) as usize;
                                     if y_idx < text.len() {
                                         text[y_idx as usize][x as usize] = text[y as usize][x as usize].clone();
-                                        text[y as usize][x as usize] = " ".to_string();
+                                        text[y as usize][x as usize] = TextCell { text: " ".to_string(), hl_id: 0};
                                     }
                                 }
                             }
@@ -247,7 +250,6 @@ fn main() {
                         false
                     }
                     NvimEvent::DefaultColorsSet { fg, bg, special } => {
-                        println!("Ok I got here and am gonna set the colors right fast");
                         pane.set_colors(fg, bg, special);
                         false
                     }
@@ -261,6 +263,11 @@ fn main() {
                     NvimEvent::ModeInfoSet(mode_info) => {
                         false
                     }
+                    NvimEvent::HighlightAttrDefine{ id, hl } => {
+                        highlight_table.insert(id, hl);
+                        println!("HL TABLE: {:?}", highlight_table);
+                        false
+                    }
                 }
             }
             Err(_) => {
@@ -269,7 +276,7 @@ fn main() {
         };
 
         if has_received {
-            pane.draw(&mut canvas, &text);
+            pane.draw(&mut canvas, &text, &highlight_table);
             canvas.present();
         }
         sleep(Duration::from_millis(1));

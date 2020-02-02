@@ -5,10 +5,18 @@ use sdl2::ttf::Font;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::neovim_connector::Highlight;
+
 #[derive(Hash, PartialEq)]
 struct FontCacheKey {
     c: String,
     color: Color,
+}
+
+#[derive(Clone)]
+pub struct TextCell {
+    pub text: String,
+    pub hl_id: i64,
 }
 
 struct FontCacheEntry {
@@ -75,20 +83,32 @@ impl<'a> Pane<'a> {
     pub fn draw(
         &mut self,
         canvas: &mut WindowCanvas,
-        text: &[Vec<String>],
+        text: &[Vec<TextCell>],
+        highlight_table: &HashMap<i64, Highlight>,
     ) {
         canvas.set_draw_color(self.bg_color);
         canvas.clear();
-        canvas.set_draw_color(self.fg_color);
+        // canvas.set_draw_color(self.fg_color);
         for (rownum, row) in text.iter().enumerate() {
             for (colnum, col) in row.iter().enumerate() {
 
+                let color = if highlight_table.contains_key(&col.hl_id) {
+                    let fg = highlight_table[&col.hl_id].fg;
+                    if fg == -1 {
+                        self.fg_color
+                    } else {
+                        parse_color(fg)
+                    }
+                } else {
+                    self.fg_color
+                };
+                canvas.set_draw_color(color);
                 let key = FontCacheKey {
-                    c: col.to_string(),
-                    color: self.fg_color,
+                    c: col.text.to_string(),
+                    color: color,
                 };
                 let tex = self.font_cache.get(&key).cloned().unwrap_or_else(|| {
-                    let surface = self.font.render(&col.to_string()).blended(self.fg_color).unwrap();
+                    let surface = self.font.render(&col.text.to_string()).blended(color).unwrap();
                     let texture = canvas
                         .texture_creator()
                         .create_texture_from_surface(&surface)
@@ -107,6 +127,17 @@ impl<'a> Pane<'a> {
                 let h = self.row_height;
                 let source = Rect::new(0, 0, w as u32, h as u32);
                 let target = Rect::new(self.x + colnum as i32 * self.col_width as i32, self.y + rownum as i32 * self.row_height as i32, w as u32, h as u32);
+                if highlight_table.contains_key(&col.hl_id) {
+                    let color = highlight_table[&col.hl_id].bg;
+                    if color == -1 {
+                        canvas.set_draw_color(self.bg_color);
+                    } else {
+                        canvas.set_draw_color(parse_color(color));
+                    }
+                } else {
+                    canvas.set_draw_color(self.bg_color);
+                }
+                canvas.fill_rect(target).unwrap();
                 canvas.copy(&texture, Some(source), Some(target)).unwrap();
             }
         }
