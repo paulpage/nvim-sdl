@@ -10,7 +10,7 @@ use std::sync::mpsc::channel;
 use std::collections::HashMap;
 // use std::time::Instant;
 
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Mod};
 use sdl2::mouse::MouseButton;
 use sdl2::render::WindowCanvas;
@@ -27,7 +27,10 @@ struct InputState {
     shift_down: bool,
     mouse_row: i32,
     mouse_col: i32,
+    mouse_button: String,
     mode: NvimMode,
+    num_rows: i64,
+    num_cols: i64,
 }
 
 fn select_font() -> Option<PathBuf> {
@@ -59,7 +62,10 @@ fn main() {
         shift_down: false,
         mouse_row: 0,
         mouse_col: 0,
+        mouse_button: String::new(),
         mode: NvimMode::Normal,
+        num_rows: 0,
+        num_cols: 0,
     };
 
     let sdl_context = sdl2::init().unwrap();
@@ -75,15 +81,22 @@ fn main() {
         .unwrap();
     let mut canvas: WindowCanvas = window.into_canvas().build().unwrap();
 
-    let mut text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; 80]; 30];
+    let font = ttf_context.load_font(&path, 16).unwrap();
+    let col_width = font.size_of_char('W').unwrap().0 as i32;
+    let row_height = font.height();
+    let (window_w, window_h) = canvas.window().size();
+    input.num_cols = window_w as i64 / col_width as i64;
+    input.num_rows = window_h as i64 / row_height as i64;
+    client_sender.send(ClientEvent::WindowResize {
+        cols: input.num_cols,
+        rows: input.num_rows,
+    }).unwrap();
+
+    let mut text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; input.num_cols as usize]; input.num_rows as usize];
 
     let mut pane = Pane::new(
         ttf_context.load_font(&path, 16).unwrap()
     );
-
-    let font = ttf_context.load_font(&path, 16).unwrap();
-    let col_width = font.size_of_char('W').unwrap().0 as i32;
-    let row_height = font.height();
 
     let mut highlight_table = HashMap::new();
 
@@ -276,8 +289,16 @@ fn main() {
                     input.ctrl_down = keymod.contains(Mod::LCTRLMOD | Mod::RCTRLMOD);
                     input.alt_down = keymod.contains(Mod::LALTMOD | Mod::RALTMOD);
                 }
-                // Event::Window { win_event, .. } => {
-                // }
+                Event::Window { win_event, .. } => {
+                    if let WindowEvent::Resized(w, h) = win_event {
+                        let num_cols = w as i64 / col_width as i64;
+                        let num_rows = h as i64 / row_height as i64;
+                        client_sender.send(ClientEvent::WindowResize {
+                            cols: num_cols,
+                            rows: num_rows,
+                        }).unwrap();
+                    }
+                }
                 Event::MouseButtonDown { x, y, clicks, mouse_btn, .. } => {
                     input.mouse_col = x / col_width;
                     input.mouse_row = y / row_height;
@@ -287,6 +308,7 @@ fn main() {
                         MouseButton::Middle => "middle",
                         _ => "",
                     };
+                    input.mouse_button = button.clone().into();
                     if button != "" {
                         for _ in 0..clicks {
                             client_sender.send(ClientEvent::Mouse {
@@ -300,12 +322,38 @@ fn main() {
                         }
                     }
                 }
+                Event::MouseButtonUp { mouse_btn, .. } => {
+                    let button = match mouse_btn {
+                        MouseButton::Left => "left",
+                        MouseButton::Right => "right",
+                        MouseButton::Middle => "middle",
+                        _ => "",
+                    };
+                    client_sender.send(ClientEvent::Mouse {
+                        button: button.into(),
+                        action: "release".into(),
+                        modifier: "".into(), // TODO
+                        grid: 0,
+                        col: input.mouse_col.into(),
+                        row: input.mouse_row.into(),
+                    }).unwrap();
+                    input.mouse_button = String::new();
+                }
                 Event::MouseMotion {
-                    mousestate, x, y, ..
+                    x, y, ..
                 } => {
-                    input.mouse_col = x / col_width;
-                    input.mouse_row = y / row_height;
-                    // TODO: drag
+                    if input.mouse_button != "" {
+                        input.mouse_col = x / col_width;
+                        input.mouse_row = y / row_height;
+                        client_sender.send(ClientEvent::Mouse {
+                            button: input.mouse_button.clone(),
+                            action: "drag".into(),
+                            modifier: "".into(), // TODO
+                            grid: 0,
+                            col: input.mouse_col.into(),
+                            row: input.mouse_row.into(),
+                        }).unwrap();
+                    }
                 }
                 Event::MouseWheel { x, y, .. } => {
                     let action = match (x, y) {
@@ -354,7 +402,7 @@ fn main() {
                         false
                     }
                     NvimEvent::GridClear(_) => {
-                        text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; 80]; 30];
+                        text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; input.num_cols as usize]; input.num_rows as usize];
                         false
                     }
                     NvimEvent::GridScroll(e) => {
@@ -399,9 +447,23 @@ fn main() {
                         highlight_table.insert(id, hl);
                         false
                     }
+                    NvimEvent::GridResize { cols, rows, .. } => {
+                        input.num_cols = cols;
+                        input.num_rows = rows;
+                        text = vec![vec![TextCell { text: " ".to_string(), hl_id: 0 }; input.num_cols as usize]; input.num_rows as usize];
+                        let (w, h) = canvas.window().size();
+                        pane.w = w as u32;
+                        pane.h = h as u32;
+                        // client_sender.send(ClientEvent::WindowResize {
+                        //     cols: input.num_cols,
+                        //     rows: input.num_rows,
+                        // }).unwrap();
+                        true
+                    }
                 }
             }
             Err(_) => {
+                // sleep(Duration::from_millis(1));
                 false
             }
         };

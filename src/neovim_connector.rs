@@ -83,11 +83,13 @@ pub enum NvimEvent {
     ModeChange(NvimMode),
     ModeInfoSet(ModeInfo),
     HighlightAttrDefine { id: i64, hl: Highlight },
+    GridResize { grid: i64, cols: i64, rows: i64 },
 }
 
 pub enum ClientEvent {
     Text(String),
     Mouse { button: String, action: String, modifier: String, grid: i64, row: i64, col: i64 },
+    WindowResize { cols: i64, rows: i64 },
 }
 
 pub struct NvimBridge {
@@ -231,22 +233,24 @@ impl Handler for NvimBridge {
                                 }
                                 "hl_group_set" => {
                                     // println!("HL GROUP SET:");
-                                    for arg in event {
+                                    // for arg in event {
                                         // println!();
                                         // pretty_print_value(arg, 0);
-                                    }
+                                    // }
                                 }
                                 "option_set" => {
-                                    for arg in event {
+                                    // for arg in event {
                                         // pretty_print_value(arg, 0);
                                         // println!();
-                                    }
+                                    // }
                                 }
                                 "grid_resize" => {
-                                    for arg in event {
-                                        // pretty_print_value(arg, 0);
-                                        // println!();
-                                    }
+                                    let args = event[1].as_array().unwrap();
+                                    self.tx.send(NvimEvent::GridResize {
+                                        grid: args[0].as_i64().unwrap(),
+                                        cols: args[1].as_i64().unwrap(),
+                                        rows: args[2].as_i64().unwrap(),
+                                    }).unwrap();
                                 }
                                 _ => {
                                     println!("Unknown redraw: {:?}", event_name);
@@ -295,7 +299,13 @@ pub fn start(tx: Sender<NvimEvent>, rx: Receiver<ClientEvent>, args: Args) {
                         button.into(), action.into(), modifier.into(), grid.into(), row.into(), col.into()
                     ]).unwrap();
                 },
-
+                ClientEvent::WindowResize { cols, rows } => {
+                    nvim.ui_try_resize(cols, rows).unwrap();
+                    // nvim.call_function(
+                    //     "nvim_ui_try_resize",
+                    //     vec![cols.into(), rows.into()],
+                    // ).unwrap();
+                }
             }
         }
     }
