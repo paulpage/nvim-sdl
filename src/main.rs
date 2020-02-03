@@ -13,6 +13,8 @@ use std::time::Duration;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Mod};
 use sdl2::mouse::MouseButton;
+use sdl2::rect::Rect;
+use sdl2::pixels::Color;
 
 mod pane;
 use pane::{Pane, TextCell};
@@ -119,16 +121,6 @@ fn main() {
         .unwrap();
 
     let mut text = new_grid(state.num_cols as usize, state.num_rows as usize);
-    // let mut text = vec![
-    //     vec![
-    //         TextCell {
-    //             text: " ".to_string(),
-    //             hl_id: 0
-    //         };
-    //         state.num_cols as usize
-    //     ];
-    //     state.num_rows as usize
-    // ];
 
     let mut pane = Pane::new(font);
 
@@ -454,43 +446,25 @@ fn main() {
                     }
                     NvimEvent::GridClear(_) => {
                         text = new_grid(state.num_cols as usize, state.num_rows as usize);
-                        // text = vec![
-                        //     vec![
-                        //         TextCell {
-                        //             text: " ".to_string(),
-                        //             hl_id: 0
-                        //         };
-                        //         state.num_cols as usize
-                        //     ];
-                        //     state.num_rows as usize
-                        // ];
                     }
                     NvimEvent::GridScroll(e) => {
                         if e.rows > 0 {
                             for y in e.top..e.bot {
                                 for x in e.left..e.right {
-                                    let y_idx = y - e.rows;
-                                    if y_idx >= 0 {
-                                        text[y_idx as usize][x as usize] =
+                                    if y - e.rows >= e.top {
+                                        text[(y - e.rows) as usize][x as usize] =
                                             text[y as usize][x as usize].clone();
-                                        text[y as usize][x as usize] = TextCell {
-                                            text: " ".to_string(),
-                                            hl_id: 0,
-                                        };
+                                        text[y as usize][x as usize] = TextCell::new();
                                     }
                                 }
                             }
                         } else {
-                            for y in (e.top..e.bot - 1).rev() {
+                            for y in (e.top..e.bot).rev() {
                                 for x in (e.left..e.right).rev() {
-                                    let y_idx = (y - e.rows) as usize;
-                                    if y_idx < text.len() {
-                                        text[y_idx as usize][x as usize] =
+                                    if y - e.rows < e.bot {
+                                        text[(y - e.rows) as usize][x as usize] =
                                             text[y as usize][x as usize].clone();
-                                        text[y as usize][x as usize] = TextCell {
-                                            text: " ".to_string(),
-                                            hl_id: 0,
-                                        };
+                                        text[y as usize][x as usize] = TextCell::new();
                                     }
                                 }
                             }
@@ -513,16 +487,6 @@ fn main() {
                         state.num_cols = cols;
                         state.num_rows = rows;
                         text = new_grid(state.num_cols as usize, state.num_rows as usize);
-                        // text = vec![
-                        //     vec![
-                        //         TextCell {
-                        //             text: " ".to_string(),
-                        //             hl_id: 0
-                        //         };
-                        //         state.num_cols as usize
-                        //     ];
-                        //     state.num_rows as usize
-                        // ];
                         let (w, h) = canvas.window().size();
                         pane.w = w as u32;
                         pane.h = h as u32;

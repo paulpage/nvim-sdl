@@ -104,7 +104,6 @@ impl<'a> Pane<'a> {
 
         for (rownum, row) in text.iter().enumerate() {
             for (colnum, col) in row.iter().enumerate() {
-                // let start = Instant::now();
 
                 let last_color = color;
                 color = if highlight_table.contains_key(&col.hl_id) {
@@ -121,9 +120,6 @@ impl<'a> Pane<'a> {
                 if color != last_color {
                     canvas.set_draw_color(color);
                 }
-                
-                // println!("Color: {:?}", start.elapsed());
-                // let start = Instant::now();
 
                 let key = FontCacheKey {
                     c: col.text.to_string(),
@@ -149,8 +145,6 @@ impl<'a> Pane<'a> {
                     resource
                 });
                 let texture = &tex.texture;
-                // println!("Texture: {:?}", start.elapsed());
-                // let start = Instant::now();
 
                 let target = Rect::new(
                     self.x + colnum as i32 * self.col_width as i32,
@@ -158,8 +152,6 @@ impl<'a> Pane<'a> {
                     self.col_width as u32,
                     self.row_height as u32,
                 );
-                // println!("Target Rect: {:?}", start.elapsed());
-                // let start = Instant::now();
 
                 if highlight_table.contains_key(&col.hl_id) {
                     let color = highlight_table[&col.hl_id].bg;
@@ -168,11 +160,8 @@ impl<'a> Pane<'a> {
                         canvas.fill_rect(target).unwrap();
                     }
                 }
-                // println!("Maybe background: {:?}", start.elapsed());
-                // let start = Instant::now();
 
                 canvas.copy(&texture, Some(char_rect), Some(target)).unwrap();
-                // println!("Copy: {:?}", start.elapsed());
             }
         }
 
@@ -184,6 +173,5 @@ impl<'a> Pane<'a> {
             self.row_height as u32,
         );
         canvas.fill_rect(cursor_rect).unwrap();
-        println!("Draw took {:?}", start.elapsed());
     }
 }
