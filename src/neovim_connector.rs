@@ -1,9 +1,9 @@
 extern crate neovim_lib;
 
-use std::process::Command;
-use neovim_lib::{Value, Neovim, NeovimApi, Session, UiAttachOptions, Handler, RequestHandler};
-use std::sync::mpsc::{Sender, Receiver};
+use neovim_lib::{Handler, Neovim, NeovimApi, RequestHandler, Session, UiAttachOptions, Value};
 use std::env::Args;
+use std::process::Command;
+use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug)]
 pub struct GridCell {
@@ -69,7 +69,11 @@ pub struct ModeInfo {
 }
 
 #[derive(Debug)]
-pub enum NvimMode { Normal, Insert, Command }
+pub enum NvimMode {
+    Normal,
+    Insert,
+    Command,
+}
 
 #[derive(Debug)]
 pub enum NvimEvent {
@@ -88,8 +92,18 @@ pub enum NvimEvent {
 
 pub enum ClientEvent {
     Text(String),
-    Mouse { button: String, action: String, modifier: String, grid: i64, row: i64, col: i64 },
-    WindowResize { cols: i64, rows: i64 },
+    Mouse {
+        button: String,
+        action: String,
+        modifier: String,
+        grid: i64,
+        row: i64,
+        col: i64,
+    },
+    WindowResize {
+        cols: i64,
+        rows: i64,
+    },
 }
 
 pub struct NvimBridge {
@@ -104,25 +118,52 @@ impl NvimBridge {
 
 fn pretty_print_value(v: &Value, indent_level: usize) {
     match v {
-        Value::Nil => { print!("(nil value)"); },
-        Value::Boolean(b) => { print!("{}{}", " ".repeat(indent_level), b); },
-        Value::Integer(i) => { print!("{}{}", " ".repeat(indent_level), i); },
-        Value::F32(f)     => { print!("{}{}", " ".repeat(indent_level), f); },
-        Value::F64(f)     => { print!("{}{}", " ".repeat(indent_level), f); },
-        Value::String(s) => { print!("{}{}", " ".repeat(indent_level), s); },
-        Value::Binary(bs) => { print!("(skipping binary value)"); },
-        Value::Array(vs) => { print!("["); for v in vs { pretty_print_value(v, indent_level + 2); print!(", ");} print!("]"); },
-        Value::Map(vvs) => { print!("{{"); for (k, v) in vvs { pretty_print_value(k, indent_level); print!(":"); pretty_print_value(v, indent_level + 2); } print!(" }}"); },
-        Value::Ext(i, us) => { print!("(skipping ext value)"); },
+        Value::Nil => {
+            print!("(nil value)");
+        }
+        Value::Boolean(b) => {
+            print!("{}{}", " ".repeat(indent_level), b);
+        }
+        Value::Integer(i) => {
+            print!("{}{}", " ".repeat(indent_level), i);
+        }
+        Value::F32(f) => {
+            print!("{}{}", " ".repeat(indent_level), f);
+        }
+        Value::F64(f) => {
+            print!("{}{}", " ".repeat(indent_level), f);
+        }
+        Value::String(s) => {
+            print!("{}{}", " ".repeat(indent_level), s);
+        }
+        Value::Binary(_) => {
+            print!("(skipping binary value)");
+        }
+        Value::Array(vs) => {
+            print!("[");
+            for v in vs {
+                pretty_print_value(v, indent_level + 2);
+                print!(", ");
+            }
+            print!("]");
+        }
+        Value::Map(vvs) => {
+            print!("{{");
+            for (k, v) in vvs {
+                pretty_print_value(k, indent_level);
+                print!(":");
+                pretty_print_value(v, indent_level + 2);
+            }
+            print!(" }}");
+        }
+        Value::Ext(_, _) => {
+            print!("(skipping ext value)");
+        }
     }
 }
 
 impl RequestHandler for NvimBridge {
-    fn handle_request(
-        &mut self,
-        name: &str,
-        args: Vec<Value>,
-    ) -> Result<Value, Value> {
+    fn handle_request(&mut self, name: &str, _args: Vec<Value>) -> Result<Value, Value> {
         println!("Unknown request: {}", name);
         Err("Unkown request".into())
     }
@@ -143,7 +184,11 @@ fn parse_grid_cells(entry: Vec<Value>) -> Vec<GridCell> {
         } else {
             1
         };
-        cells.push(GridCell { text, highlight, repeat });
+        cells.push(GridCell {
+            text,
+            highlight,
+            repeat,
+        });
     }
     cells
 }
@@ -171,32 +216,50 @@ impl Handler for NvimBridge {
                     if let Value::Array(event) = event {
                         if let Value::String(event_name) = &event[0] {
                             match event_name.as_str().unwrap() {
-                                "grid_line" => self.tx.send(NvimEvent::GridLine(parse_gridline_event(event.to_vec()))).unwrap(),
+                                "grid_line" => self
+                                    .tx
+                                    .send(NvimEvent::GridLine(parse_gridline_event(event.to_vec())))
+                                    .unwrap(),
                                 "flush" => self.tx.send(NvimEvent::Flush).unwrap(),
                                 "grid_cursor_goto" => {
                                     let goto_args = event[1].as_array().unwrap();
                                     let grid = goto_args[0].as_i64().unwrap();
                                     let row = goto_args[1].as_i64().unwrap();
                                     let col = goto_args[2].as_i64().unwrap();
-                                    self.tx.send(NvimEvent::GridCursorGoto(grid, row, col)).unwrap();
+                                    self.tx
+                                        .send(NvimEvent::GridCursorGoto(grid, row, col))
+                                        .unwrap();
                                 }
-                                "grid_clear" => self.tx.send(NvimEvent::GridClear(event[1].as_array().unwrap()[0].as_i64().unwrap())).unwrap(),
+                                "grid_clear" => self
+                                    .tx
+                                    .send(NvimEvent::GridClear(
+                                        event[1].as_array().unwrap()[0].as_i64().unwrap(),
+                                    ))
+                                    .unwrap(),
                                 // "grid_clear" => println!("CLEAR {:?}", event),
                                 "grid_scroll" => {
                                     let scroll_args = event[1].as_array().unwrap();
-                                    self.tx.send(NvimEvent::GridScroll(GridScroll {
-                                        grid: scroll_args[0].as_i64().unwrap(),
-                                        top: scroll_args[1].as_i64().unwrap(),
-                                        bot: scroll_args[2].as_i64().unwrap(),
-                                        left: scroll_args[3].as_i64().unwrap(),
-                                        right: scroll_args[4].as_i64().unwrap(),
-                                        rows: scroll_args[5].as_i64().unwrap(),
-                                        cols: scroll_args[6].as_i64().unwrap(),
-                                    })).unwrap();
+                                    self.tx
+                                        .send(NvimEvent::GridScroll(GridScroll {
+                                            grid: scroll_args[0].as_i64().unwrap(),
+                                            top: scroll_args[1].as_i64().unwrap(),
+                                            bot: scroll_args[2].as_i64().unwrap(),
+                                            left: scroll_args[3].as_i64().unwrap(),
+                                            right: scroll_args[4].as_i64().unwrap(),
+                                            rows: scroll_args[5].as_i64().unwrap(),
+                                            cols: scroll_args[6].as_i64().unwrap(),
+                                        }))
+                                        .unwrap();
                                 }
                                 "default_colors_set" => {
                                     let color_args = event[1].as_array().unwrap();
-                                    self.tx.send(NvimEvent::DefaultColorsSet { fg: color_args[0].as_i64().unwrap(), bg: color_args[1].as_i64().unwrap(), special: color_args[2].as_i64().unwrap() }).unwrap();
+                                    self.tx
+                                        .send(NvimEvent::DefaultColorsSet {
+                                            fg: color_args[0].as_i64().unwrap(),
+                                            bg: color_args[1].as_i64().unwrap(),
+                                            special: color_args[2].as_i64().unwrap(),
+                                        })
+                                        .unwrap();
                                 }
                                 "mouse_on" => {}
                                 "mouse_off" => {}
@@ -215,42 +278,66 @@ impl Handler for NvimBridge {
                                         let map = args[1].as_map().unwrap();
                                         for (k, v) in map {
                                             match k.as_str().unwrap() {
-                                                "foreground" => { hl.fg = v.as_i64().unwrap(); }
-                                                "background" => { hl.bg = v.as_i64().unwrap(); }
-                                                "special" => { hl.special = v.as_i64().unwrap(); }
-                                                "reverse" => { hl.reverse = v.as_bool().unwrap(); }
-                                                "italic" => { hl.italic = v.as_bool().unwrap(); }
-                                                "bold" => { hl.bold = v.as_bool().unwrap(); }
-                                                "strikethrough" => { hl.strikethrough = v.as_bool().unwrap(); }
-                                                "underline" => { hl.underline = v.as_bool().unwrap(); }
-                                                "undercurl" => { hl.undercurl = v.as_bool().unwrap(); }
-                                                "blend" => { hl.blend = v.as_i64().unwrap(); }
+                                                "foreground" => {
+                                                    hl.fg = v.as_i64().unwrap();
+                                                }
+                                                "background" => {
+                                                    hl.bg = v.as_i64().unwrap();
+                                                }
+                                                "special" => {
+                                                    hl.special = v.as_i64().unwrap();
+                                                }
+                                                "reverse" => {
+                                                    hl.reverse = v.as_bool().unwrap();
+                                                }
+                                                "italic" => {
+                                                    hl.italic = v.as_bool().unwrap();
+                                                }
+                                                "bold" => {
+                                                    hl.bold = v.as_bool().unwrap();
+                                                }
+                                                "strikethrough" => {
+                                                    hl.strikethrough = v.as_bool().unwrap();
+                                                }
+                                                "underline" => {
+                                                    hl.underline = v.as_bool().unwrap();
+                                                }
+                                                "undercurl" => {
+                                                    hl.undercurl = v.as_bool().unwrap();
+                                                }
+                                                "blend" => {
+                                                    hl.blend = v.as_i64().unwrap();
+                                                }
                                                 _ => {}
                                             }
                                         }
-                                        self.tx.send(NvimEvent::HighlightAttrDefine { id, hl }).unwrap();
+                                        self.tx
+                                            .send(NvimEvent::HighlightAttrDefine { id, hl })
+                                            .unwrap();
                                     }
                                 }
                                 "hl_group_set" => {
                                     // println!("HL GROUP SET:");
                                     // for arg in event {
-                                        // println!();
-                                        // pretty_print_value(arg, 0);
+                                    // println!();
+                                    // pretty_print_value(arg, 0);
                                     // }
                                 }
                                 "option_set" => {
                                     // for arg in event {
-                                        // pretty_print_value(arg, 0);
-                                        // println!();
+                                    // pretty_print_value(arg, 0);
+                                    // println!();
                                     // }
                                 }
                                 "grid_resize" => {
                                     let args = event[1].as_array().unwrap();
-                                    self.tx.send(NvimEvent::GridResize {
-                                        grid: args[0].as_i64().unwrap(),
-                                        cols: args[1].as_i64().unwrap(),
-                                        rows: args[2].as_i64().unwrap(),
-                                    }).unwrap();
+                                    self.tx
+                                        .send(NvimEvent::GridResize {
+                                            grid: args[0].as_i64().unwrap(),
+                                            cols: args[1].as_i64().unwrap(),
+                                            rows: args[2].as_i64().unwrap(),
+                                        })
+                                        .unwrap();
                                 }
                                 _ => {
                                     println!("Unknown redraw: {:?}", event_name);
@@ -260,7 +347,7 @@ impl Handler for NvimBridge {
                     }
                 }
             }
-            _ => println!("Unknown notify: {} {:?}", name, args)
+            _ => println!("Unknown notify: {} {:?}", name, args),
         }
     }
     fn handle_close(&mut self) {
@@ -294,11 +381,27 @@ pub fn start(tx: Sender<NvimEvent>, rx: Receiver<ClientEvent>, args: Args) {
                 ClientEvent::Text(s) => {
                     nvim.input(&s).unwrap();
                 }
-                ClientEvent::Mouse { button, action, modifier, grid, row, col } => {
-                    nvim.call_function("nvim_input_mouse", vec![
-                        button.into(), action.into(), modifier.into(), grid.into(), row.into(), col.into()
-                    ]).unwrap();
-                },
+                ClientEvent::Mouse {
+                    button,
+                    action,
+                    modifier,
+                    grid,
+                    row,
+                    col,
+                } => {
+                    nvim.call_function(
+                        "nvim_input_mouse",
+                        vec![
+                            button.into(),
+                            action.into(),
+                            modifier.into(),
+                            grid.into(),
+                            row.into(),
+                            col.into(),
+                        ],
+                    )
+                    .unwrap();
+                }
                 ClientEvent::WindowResize { cols, rows } => {
                     nvim.ui_try_resize(cols, rows).unwrap();
                     // nvim.call_function(
