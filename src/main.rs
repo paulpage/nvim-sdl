@@ -406,7 +406,6 @@ fn main() {
             }
         }
 
-        let mut redraw = false;
         'notifyloop: loop {
             match server_receiver.try_recv() {
                 Ok(event) => match event {
@@ -436,9 +435,7 @@ fn main() {
                             }
                         }
                     }
-                    NvimEvent::Flush => {
-                        redraw = true;
-                    }
+                    NvimEvent::Flush => {}
                     NvimEvent::GridCursorGoto(_grid, row, col) => {
                         pane.cursor_row = row as i32;
                         pane.cursor_col = col as i32;
@@ -497,9 +494,7 @@ fn main() {
             }
         }
 
-        if redraw {
-            pane.draw(&mut canvas, &text, &highlight_table);
-        }
+        pane.draw(&mut canvas, &text, &highlight_table);
         canvas.present();
     }
 }
