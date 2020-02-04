@@ -4,7 +4,7 @@ use sdl2::render::{Texture, TextureQuery, WindowCanvas};
 use sdl2::ttf::Font;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Instant;
+// use std::time::Instant;
 
 use crate::neovim_connector::Highlight;
 
@@ -96,7 +96,7 @@ impl<'a> Pane<'a> {
         text: &[Vec<TextCell>],
         highlight_table: &HashMap<i64, Highlight>,
     ) {
-        let start = Instant::now();
+        // let start = Instant::now();
         let char_rect = Rect::new(0, 0, self.col_width, self.row_height);
         let mut color = self.fg_color;
         canvas.set_draw_color(self.bg_color);
@@ -104,7 +104,6 @@ impl<'a> Pane<'a> {
 
         for (rownum, row) in text.iter().enumerate() {
             for (colnum, col) in row.iter().enumerate() {
-
                 let last_color = color;
                 color = if highlight_table.contains_key(&col.hl_id) {
                     let fg = highlight_table[&col.hl_id].fg;
@@ -161,7 +160,9 @@ impl<'a> Pane<'a> {
                     }
                 }
 
-                canvas.copy(&texture, Some(char_rect), Some(target)).unwrap();
+                canvas
+                    .copy(&texture, Some(char_rect), Some(target))
+                    .unwrap();
             }
         }
 
