@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
+use std::cmp::max;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -294,7 +295,7 @@ fn main() {
                     }
                 }
                 Event::TextInput { text, .. } => {
-                    client_sender.send(ClientEvent::Text(text)).unwrap();
+                    client_sender.send(ClientEvent::Text(text.replace("<", "<lt>"))).unwrap();
                 }
                 Event::KeyUp { keymod, .. } => {
                     update_modifier_state(&keymod, &mut state);
@@ -352,16 +353,18 @@ fn main() {
                         MouseButton::Middle => "middle",
                         _ => "",
                     };
-                    client_sender
-                        .send(ClientEvent::Mouse {
-                            button: button.into(),
-                            action: "release".into(),
-                            modifier: "".into(), // TODO
-                            grid: 0,
-                            col: state.mouse_col.into(),
-                            row: state.mouse_row.into(),
-                        })
+                    if button != "" {
+                        client_sender
+                            .send(ClientEvent::Mouse {
+                                button: button.into(),
+                                action: "release".into(),
+                                modifier: "".into(), // TODO
+                                grid: 0,
+                                col: state.mouse_col.into(),
+                                row: state.mouse_row.into(),
+                            })
                         .unwrap();
+                    }
                     state.mouse_button = MouseButtonState::Nil;
                 }
                 Event::MouseMotion { x, y, .. } => {
@@ -384,23 +387,28 @@ fn main() {
                     }
                 }
                 Event::MouseWheel { x, y, .. } => {
-                    let action = match (x, y) {
+                    let x_norm = x / max(1, x.abs());
+                    let y_norm = y / max(1, y.abs());
+                    let action = match (x_norm, y_norm) {
                         (0, 1) => "up",
                         (0, -1) => "down",
                         (1, 0) => "right",
                         (-1, 0) => "left",
                         _ => "",
                     };
-                    client_sender
-                        .send(ClientEvent::Mouse {
-                            button: "wheel".into(),
-                            action: action.into(),
-                            modifier: "".into(), // TODO
-                            grid: 0,
-                            col: state.mouse_col.into(),
-                            row: state.mouse_row.into(),
-                        })
-                        .unwrap();
+                    if action != "" {
+                        for _ in 0..y.abs() {
+                            client_sender
+                                .send(ClientEvent::Mouse {
+                                    button: "wheel".into(),
+                                    action: action.into(),
+                                    modifier: "".into(), // TODO
+                                    grid: 0,
+                                    col: state.mouse_col.into(),
+                                    row: state.mouse_row.into(),
+                                }).unwrap();
+                        }
+                    }
                 }
                 _ => {}
             }

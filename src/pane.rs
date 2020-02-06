@@ -82,7 +82,7 @@ impl<'a> Pane<'a> {
             col_width: font.size_of_char('W').unwrap().0,
             cursor_row: 0,
             cursor_col: 0,
-            bg_color: Color::RGB(255, 0, 0),
+            bg_color: Color::RGB(0, 0, 0),
             fg_color: Color::RGB(0, 255, 0),
             special_color: Color::RGB(0, 0, 255),
             font,
