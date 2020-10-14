@@ -56,7 +56,7 @@ impl Highlight {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModeInfo {
     cursor_shape: String,
     cell_percentage: i64,
@@ -264,6 +264,23 @@ impl Handler for NvimBridge {
                                 "mouse_on" => {}
                                 "mouse_off" => {}
                                 "mode_info_set" => {
+                                    for e in event {
+                                        let mut mode_info = ModeInfo::default();
+                                        // let map = e[1].as_map().unwrap();
+                                        // for (k, v) in map {
+                                        //     match k.as_str().unwrap() {
+                                        //         "cursor_shape" => mode_info.cursor_shape = v.as_str().unwrap().into(),
+                                        //         "cell_percentage" => mode_info.cell_percentage = v.as_i64().unwrap(),
+                                        //         "attr_id" => mode_info.attr_id = v.as_str().unwrap().into(),
+                                        //         "attr_id_lm" => mode_info.attr_id_lm = v.as_str().unwrap().into(),
+                                        //         "short_name" => mode_info.short_name = v.as_str().unwrap().into(),
+                                        //         "name" => mode_info.name = v.as_str().unwrap().into(),
+                                        //         _ => {}
+                                        //     }
+                                        // }
+                                        pretty_print_value(e, 0);
+                                        println!();
+                                    }
                                     // println!("MODE INFO SET: {:?}", event);
                                 }
                                 "mode_change" => {

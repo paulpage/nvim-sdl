@@ -6,15 +6,11 @@ use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::cmp::max;
 use std::thread;
-use std::thread::sleep;
-use std::time::Duration;
-// use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Mod};
 use sdl2::mouse::MouseButton;
-use sdl2::pixels::Color;
-use sdl2::rect::Rect;
 
 mod pane;
 use pane::{Pane, TextCell};
@@ -102,10 +98,11 @@ fn main() {
         .position_centered()
         .resizable()
         .maximized()
-        .opengl()
+        // .opengl()
         .build()
         .unwrap();
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    // let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    let mut canvas = window.into_canvas().build().unwrap();
 
     let font = ttf_context.load_font(&select_font().unwrap(), 16).unwrap();
     let col_width = font.size_of_char('W').unwrap().0 as i32;
@@ -126,7 +123,12 @@ fn main() {
 
     let mut highlight_table = HashMap::new();
 
+    let mut time = Instant::now();
+
     'mainloop: loop {
+        // println!("{:?}", time.elapsed());
+        // time = Instant::now();
+        let mut dirty = false;
         for event in sdl_context.event_pump().unwrap().poll_iter() {
             match event {
                 Event::Quit { .. } => break 'mainloop,
@@ -136,7 +138,6 @@ fn main() {
                     ..
                 } => {
                     update_modifier_state(&keymod, &mut state);
-
                     // These keys should only be send with a modifier, otherwise they're handled by
                     // the text input event.
                     let mut key_to_send = match kc {
@@ -416,8 +417,10 @@ fn main() {
 
         'notifyloop: loop {
             match server_receiver.try_recv() {
-                Ok(event) => match event {
+                Ok(event) => {
+                    match event {
                     NvimEvent::GridLine(entries) => {
+                        // dirty = true;
                         let mut last_hl_id = -1;
                         for entry in entries {
                             let row = entry.row as usize;
@@ -443,15 +446,20 @@ fn main() {
                             }
                         }
                     }
-                    NvimEvent::Flush => {}
+                    NvimEvent::Flush => {
+                        dirty = true;
+                    }
                     NvimEvent::GridCursorGoto(_grid, row, col) => {
+                        // dirty = true;
                         pane.cursor_row = row as i32;
                         pane.cursor_col = col as i32;
                     }
                     NvimEvent::GridClear(_) => {
+                        // dirty = true;
                         text = new_grid(state.num_cols as usize, state.num_rows as usize);
                     }
                     NvimEvent::GridScroll(e) => {
+                        // dirty = true;
                         if e.rows > 0 {
                             for y in e.top..e.bot {
                                 for x in e.left..e.right {
@@ -495,6 +503,7 @@ fn main() {
                         pane.w = w as u32;
                         pane.h = h as u32;
                     }
+                }
                 },
                 Err(_) => {
                     break 'notifyloop;
@@ -502,7 +511,10 @@ fn main() {
             }
         }
 
-        pane.draw(&mut canvas, &text, &highlight_table);
+        if (dirty) {
+            pane.draw(&mut canvas, &text, &highlight_table);
+        }
+        std::thread::sleep(Duration::from_millis(1));
         canvas.present();
     }
 }
